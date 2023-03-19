@@ -40,4 +40,8 @@ impl VertexArray {
     pub unsafe fn bind(&self) {
         gl::BindVertexArray(self.id);
     }
+
+    pub unsafe fn unbind(&self) {
+        gl::BindVertexArray(0);
+    }
 }

@@ -11,50 +11,62 @@ use thiserror::Error;
 const VERTEX_SHADER_SOURCE: &str = r#"
 #version 330
 in vec3 position;
-in vec3 color;
+// in vec3 color;
 
 uniform mat4 transform;
 
-out vec3 vColor;
+out vec3 pos;
 
 void main()
 {
     gl_Position = transform * vec4(position, 1.0f);
-    vColor = color;
-} 
+    pos = position;
+}
 "#;
 
 const FRAGMENT_SHADER_SOURCE: &str = r#"
 #version 330
-in vec3 vColor;
+in vec3 pos;
 out vec4 FragColor;
 
 void main() {
-    FragColor = vec4(vColor, 1.0f);
+    FragColor = vec4(1 / abs(pos[0]), 1 / abs(pos[1]), 1 / abs(pos[2]), 1.0f);
 }
 "#;
 
-#[rustfmt::skip]
-const CUBE_VERTICES: [f32; 24] = [
-    -1.0, -1.0,  1.0,
-    1.0, -1.0,  1.0,
-    1.0,  1.0,  1.0,
-    -1.0,  1.0,  1.0,
-    -1.0, -1.0, -1.0,
-    1.0, -1.0, -1.0,
-    1.0,  1.0, -1.0,
-    -1.0,  1.0, -1.0
-];
+// #[rustfmt::skip]
+// const CUBE_VERTICES: [f32; 24] = [
+//     -1.0, -1.0,  1.0,
+//     1.0, -1.0,  1.0,
+//     1.0,  1.0,  1.0,
+//     -1.0,  1.0,  1.0,
+//     -1.0, -1.0, -1.0,
+//     1.0, -1.0, -1.0,
+//     1.0,  1.0, -1.0,
+//     -1.0,  1.0, -1.0
+// ];
+
+// #[rustfmt::skip]
+// const CUBE_COLORS: [f32; 24] = [
+//     0.0, 0.0, 0.0,
+//     1.0, 0.0, 0.0,
+//     1.0, 1.0, 0.0,
+//     0.0, 1.0, 0.0,
+//     0.0, 0.0, 1.0,
+//     1.0, 0.0, 1.0,
+//     1.0, 1.0, 1.0,
+//     0.0, 1.0, 1.0
+// ];
 
 #[rustfmt::skip]
 const CUBE_COLORS: [f32; 24] = [
     0.0, 0.0, 0.0,
-    1.0, 0.0, 0.0,
+    0.5, 0.0, 0.0,
     1.0, 1.0, 0.0,
-    0.0, 1.0, 0.0,
+    0.0, 0.5, 0.0,
     0.0, 0.0, 1.0,
-    1.0, 0.0, 1.0,
-    1.0, 1.0, 1.0,
+    0.5, 0.0, 1.0,
+    0.5, 1.0, 1.0,
     0.0, 1.0, 1.0
 ];
 
@@ -86,7 +98,7 @@ pub struct Renderer {
     program: ShaderProgram,
     _vertex_buffer: Buffer,
     _index_buffer: Buffer,
-    _color_buffer: Buffer,
+    // _color_buffer: Buffer,
     vertex_array: VertexArray,
     eye: Vec3,
     angle: f32,
@@ -116,32 +128,38 @@ impl Renderer {
 
             let vertex_buffer = Buffer::new(gl::ARRAY_BUFFER);
             let index_buffer = Buffer::new(gl::ELEMENT_ARRAY_BUFFER);
-            let color_buffer = Buffer::new(gl::ARRAY_BUFFER);
+            // let color_buffer = Buffer::new(gl::ARRAY_BUFFER);
 
             let mut verts: Vec<f32> = Vec::new();
             let mut indices: Vec<i32> = Vec::new();
-            let mut colors: Vec<f32> = Vec::new();
+            // let mut colors: Vec<f32> = Vec::new();
 
             let mut i = 0;
             for c in cubes.iter() {
                 log::info!("Got: {}", c.loc());
                 verts.extend_from_slice(&c.geom());
                 indices.extend_from_slice(&get_indices(i));
-                colors.extend_from_slice(&CUBE_COLORS);
+                // colors.extend_from_slice(&CUBE_COLORS);
                 i += 1;
             }
             log::info!("verts: {}", format!("{:?}", verts));
             log::info!("indices: {}", format!("{:?}", indices));
-            log::info!("colors: {}", format!("{:?}", colors));
-            vertex_buffer.set_data(&verts, gl::STATIC_DRAW);
-            index_buffer.set_data(&indices, gl::STATIC_DRAW);
-            color_buffer.set_data(&colors, gl::STATIC_DRAW);
+            // log::info!("colors: {}", format!("{:?}", colors));
 
+            vertex_buffer.set_data(&verts, gl::STATIC_DRAW);
+            // color_buffer.set_data(&colors, gl::STATIC_DRAW);
+            index_buffer.set_data(&indices, gl::STATIC_DRAW);
+
+            vertex_buffer.bind();
             let pos_attrib = program.get_attrib_location("position")?;
             vertex_array.set_attribute(pos_attrib, 3, 0);
+            vertex_buffer.unbind();
 
-            let color_attrib = program.get_attrib_location("color")?;
-            vertex_array.set_attribute(color_attrib, 3, 0);
+            // color_buffer.bind();
+            // let color_attrib = program.get_attrib_location("color")?;
+            // vertex_array.set_attribute(color_attrib, 3, 0);
+            // color_buffer.unbind();
+            vertex_array.unbind();
 
             let eye = Vec3::new(8.0, 8.0, 5.0);
             let angle = std::f32::consts::PI / 4.0;
@@ -152,13 +170,15 @@ impl Renderer {
             // Accept fragment if it closer to the camera than the former one
             gl::DepthFunc(gl::LESS);
 
-            let total_length = 36 * 3;
+            let total_length = (cubes.len() * 36) as i32;
+
+            log::info!("renderer done, total_length: {}", total_length);
 
             Ok(Self {
                 program,
                 _vertex_buffer: vertex_buffer,
                 _index_buffer: index_buffer,
-                _color_buffer: color_buffer,
+                // _color_buffer: color_buffer,
                 vertex_array,
                 eye,
                 angle,
@@ -168,12 +188,11 @@ impl Renderer {
     }
 
     pub fn draw(&mut self) {
-        self.angle += 0.01;
         let model = Mat4::from_rotation_x(self.angle);
         let view = Mat4::look_at_rh(self.eye, Vec3::new(0.0, 1.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
         let projection = Mat4::perspective_rh_gl(45.0f32.to_radians(), 1024.0 / 768.0, 0.1, 100.0);
         let transform = projection * view * model;
-
+        
         unsafe {
             gl::ClearColor(0.0, 0.0, 0.0, 1.0);
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);

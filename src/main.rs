@@ -1,9 +1,12 @@
 mod renderer;
 
+use std::ffi::CStr;
+use std::os::raw::c_void;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::models::cube::Cube;
 use crate::renderer::Renderer;
+use gl::types::{GLenum, GLuint, GLsizei, GLchar};
 use glutin::dpi::{LogicalPosition, LogicalSize};
 use glutin::event::{Event, WindowEvent};
 use glutin::event_loop::{ControlFlow, EventLoop};
@@ -37,6 +40,48 @@ fn get_center(monitor: MonitorHandle) -> LogicalPosition<u32> {
     return LogicalPosition::new(x, y);
 }
 
+extern "system" fn debug_callback(
+    source: GLenum,
+    type_: GLenum,
+    id: GLuint,
+    severity: GLenum,
+    _length: GLsizei,
+    message: *const GLchar,
+    _user_param: *mut c_void,
+) {
+    let source_str = match source {
+        gl::DEBUG_SOURCE_API => "API",
+        gl::DEBUG_SOURCE_WINDOW_SYSTEM => "WINDOW_SYSTEM",
+        gl::DEBUG_SOURCE_SHADER_COMPILER => "SHADER_COMPILER",
+        gl::DEBUG_SOURCE_THIRD_PARTY => "THIRD_PARTY",
+        gl::DEBUG_SOURCE_APPLICATION => "APPLICATION",
+        gl::DEBUG_SOURCE_OTHER => "OTHER",
+        _ => "UNKNOWN",
+    };
+
+    let type_str = match type_ {
+        gl::DEBUG_TYPE_ERROR => "ERROR",
+        gl::DEBUG_TYPE_DEPRECATED_BEHAVIOR => "DEPRECATED_BEHAVIOR",
+        gl::DEBUG_TYPE_UNDEFINED_BEHAVIOR => "UNDEFINED_BEHAVIOR",
+        gl::DEBUG_TYPE_PORTABILITY => "PORTABILITY",
+        gl::DEBUG_TYPE_PERFORMANCE => "PERFORMANCE",
+        gl::DEBUG_TYPE_OTHER => "OTHER",
+        _ => "UNKNOWN",
+    };
+
+    let severity_str = match severity {
+        gl::DEBUG_SEVERITY_HIGH => "HIGH",
+        gl::DEBUG_SEVERITY_MEDIUM => "MEDIUM",
+        gl::DEBUG_SEVERITY_LOW => "LOW",
+        gl::DEBUG_SEVERITY_NOTIFICATION => "NOTIFICATION",
+        _ => "UNKNOWN",
+    };
+
+    let message_str = unsafe { CStr::from_ptr(message).to_string_lossy() };
+
+    log::error!("GL Debug ({}:{} [{}]): {}", source_str, type_str, severity_str, message_str);
+}
+
 fn main() {
     SimpleLogger::new().env().init().unwrap();
     log::info!("starting gpthack");
@@ -64,6 +109,11 @@ fn main() {
     gl::load_with(|ptr| gl_context.get_proc_address(ptr) as *const _);
 
     unsafe {
+        gl::Enable(gl::DEBUG_OUTPUT);
+        gl::DebugMessageCallback(Some(debug_callback), std::ptr::null());
+    }
+
+    unsafe {
         LAST_TIME = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -75,14 +125,16 @@ fn main() {
     }
 
     let mut cubes:Vec<Cube> = Vec::new();
-    cubes.push(Cube::new(Vec3::new(2.0, 2.0, 2.0)));
-    cubes.push(Cube::new(Vec3::new(2.0, 2.0, 0.0)));
-    cubes.push(Cube::new(Vec3::new(4.0, 4.0, 0.0)));
+    cubes.push(Cube::new(Vec3::new(0.0, 0.0, 0.0)));
+    cubes.push(Cube::new(Vec3::new(0.0, 1.0, 0.0)));
+    cubes.push(Cube::new(Vec3::new(0.0, 2.0, 0.0)));
 
     let mut renderer = Renderer::new(cubes).expect("Cannot create renderer");
     event_loop.run(move |event, _, control_flow| {
+        // let next_frame_time =
+        //     std::time::Instant::now() + std::time::Duration::from_nanos(16_666_667);
         let next_frame_time =
-            std::time::Instant::now() + std::time::Duration::from_nanos(16_666_667);
+            std::time::Instant::now() + std::time::Duration::from_nanos(0);
         *control_flow = glutin::event_loop::ControlFlow::WaitUntil(next_frame_time);
 
         unsafe {

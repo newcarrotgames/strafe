@@ -17,6 +17,7 @@ impl Buffer {
     pub unsafe fn new(target: GLuint) -> Self {
         let mut id: GLuint = 0;
         gl::GenBuffers(1, &mut id);
+        log::info!("created buffer - id: {}, target: {}", id, target);
         Self { id, target }
     }
 
@@ -29,9 +30,14 @@ impl Buffer {
             data_bytes.as_ptr() as *const _,
             usage,
         );
+        // self.unbind();
     }
 
     pub unsafe fn bind(&self) {
         gl::BindBuffer(self.target, self.id);
+    }
+
+    pub unsafe fn unbind(&self) {
+        gl::BindBuffer(self.target, 0);
     }
 }
