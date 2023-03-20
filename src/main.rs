@@ -6,6 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::models::cube::Cube;
 use crate::renderer::Renderer;
+use crate::renderer::camera::Camera;
 use gl::types::{GLchar, GLenum, GLsizei, GLuint};
 use glam::Vec3;
 use glutin::dpi::{LogicalPosition, LogicalSize};
@@ -18,7 +19,6 @@ use simple_logger::SimpleLogger;
 
 mod models {
     pub mod cube;
-    pub mod position;
 }
 
 const WINDOW_WIDTH: u32 = 1024;
@@ -146,8 +146,8 @@ fn main() {
         for (x, _) in row.iter().enumerate() {
             if FIRST_ROOM[y][x] > 0 {
                 let _x: i16 = 4 - (x as i16);
-                let _y: i16 = 4 - (y as i16);
-                cubes.push(Cube::new(Vec3::new(_x as f32, _y as f32, 0.0)));
+                let _z: i16 = 4 - (y as i16);
+                cubes.push(Cube::new(Vec3::new(_x as f32, 0.0, _z as f32)));
             }
         }
     }
@@ -156,9 +156,9 @@ fn main() {
     // cubes.push(Cube::new(Vec3::new(0.0, 1.0, 0.0)));
     // cubes.push(Cube::new(Vec3::new(0.0, 2.0, 0.0)));
 
-    let mut eye:Vec3 = Vec3::new(0.0, 0.0, 20.0);
+    let mut camera = Camera::new();
 
-    let mut renderer = Renderer::new(cubes, &mut eye).expect("Cannot create renderer");
+    let mut renderer = Renderer::new(cubes).expect("Cannot create renderer");
     event_loop.run(move |event, _, control_flow| {
         // let next_frame_time =
         //     std::time::Instant::now() + std::time::Duration::from_nanos(16_666_667);
@@ -187,6 +187,8 @@ fn main() {
                     ..
                 } => {
                     log::info!("left?");
+                    // eye[0] += 1.0;
+                    camera.turn(10.0);
                 }
                 WindowEvent::KeyboardInput {
                     input:
@@ -198,6 +200,7 @@ fn main() {
                     ..
                 } => {
                     log::info!("right?");
+                    camera.turn(-10.0);
                 }
                 WindowEvent::KeyboardInput {
                     input:
@@ -209,6 +212,7 @@ fn main() {
                     ..
                 } => {
                     log::info!("up?");
+                    // eye[1] += 1.0;
                 }
                 WindowEvent::KeyboardInput {
                     input:
@@ -220,6 +224,7 @@ fn main() {
                     ..
                 } => {
                     log::info!("down?");
+                    // eye[1] -= 1.0;
                 }
                 WindowEvent::Resized(physical_size) => gl_context.resize(physical_size),
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
@@ -229,7 +234,7 @@ fn main() {
                 gl_context.window().request_redraw();
             }
             Event::RedrawRequested(_) => {
-                renderer.draw();
+                renderer.draw(&camera);
                 gl_context.swap_buffers().unwrap();
             }
             _ => (),

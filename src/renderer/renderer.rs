@@ -8,6 +8,8 @@ use image::ImageError;
 use std::ptr;
 use thiserror::Error;
 
+use super::camera::Camera;
+
 const VERTEX_SHADER_SOURCE: &str = r#"
 #version 330
 in vec3 position;
@@ -94,13 +96,12 @@ pub enum RendererInitError {
     ShaderError(#[from] ShaderError),
 }
 
-pub struct Renderer<'a> {
+pub struct Renderer {
     program: ShaderProgram,
     _vertex_buffer: Buffer,
     _index_buffer: Buffer,
     // _color_buffer: Buffer,
     vertex_array: VertexArray,
-    eye: &'a mut Vec3,
     angle: f32,
     total_length: i32,
 }
@@ -116,8 +117,8 @@ fn get_indices(index: i32) -> [i32; 36] {
     return new_indices;
 }
 
-impl Renderer<'_> {
-    pub fn new(cubes: Vec<Cube>, eye: &'a mut Vec3) -> Result<Self, RendererInitError> {
+impl Renderer {
+    pub fn new(cubes: Vec<Cube>) -> Result<Self, RendererInitError> {
         unsafe {
             let vertex_shader = Shader::new(VERTEX_SHADER_SOURCE, gl::VERTEX_SHADER)?;
             let fragment_shader = Shader::new(FRAGMENT_SHADER_SOURCE, gl::FRAGMENT_SHADER)?;
@@ -161,7 +162,7 @@ impl Renderer<'_> {
             // color_buffer.unbind();
             vertex_array.unbind();
 
-            let angle = std::f32::consts::PI / 4.0;
+            let angle = 0.0; // std::f32::consts::PI / 1.0;
 
             // Enable depth test
             gl::Enable(gl::DEPTH_TEST);
@@ -179,19 +180,18 @@ impl Renderer<'_> {
                 _index_buffer: index_buffer,
                 // _color_buffer: color_buffer,
                 vertex_array,
-                eye,
                 angle,
                 total_length
             })
         }
     }
 
-    pub fn draw(&mut self) {
+    pub fn draw(&mut self, cam: &Camera) {
         let model = Mat4::from_rotation_x(self.angle);
-        let view = Mat4::look_at_rh(*self.eye, Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
-        let projection = Mat4::perspective_rh_gl(45.0f32.to_radians(), 1024.0 / 768.0, 0.1, 100.0);
+        let view = Mat4::look_at_rh(cam.pos, cam.target, Vec3::new(0.0, 1.0, 0.0));
+        let projection = Mat4::perspective_rh_gl(45.0f32.to_radians(), 1024.0 / 768.0, 0.1, 1000.0);
         let transform = projection * view * model;
-        
+
         unsafe {
             gl::ClearColor(0.0, 0.0, 0.0, 1.0);
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
