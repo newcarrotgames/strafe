@@ -94,13 +94,13 @@ pub enum RendererInitError {
     ShaderError(#[from] ShaderError),
 }
 
-pub struct Renderer {
+pub struct Renderer<'a> {
     program: ShaderProgram,
     _vertex_buffer: Buffer,
     _index_buffer: Buffer,
     // _color_buffer: Buffer,
     vertex_array: VertexArray,
-    eye: Vec3,
+    eye: &'a mut Vec3,
     angle: f32,
     total_length: i32,
 }
@@ -116,8 +116,8 @@ fn get_indices(index: i32) -> [i32; 36] {
     return new_indices;
 }
 
-impl Renderer {
-    pub fn new(cubes: Vec<Cube>) -> Result<Self, RendererInitError> {
+impl Renderer<'_> {
+    pub fn new(cubes: Vec<Cube>, eye: &'a mut Vec3) -> Result<Self, RendererInitError> {
         unsafe {
             let vertex_shader = Shader::new(VERTEX_SHADER_SOURCE, gl::VERTEX_SHADER)?;
             let fragment_shader = Shader::new(FRAGMENT_SHADER_SOURCE, gl::FRAGMENT_SHADER)?;
@@ -161,7 +161,6 @@ impl Renderer {
             // color_buffer.unbind();
             vertex_array.unbind();
 
-            let eye = Vec3::new(8.0, 8.0, 5.0);
             let angle = std::f32::consts::PI / 4.0;
 
             // Enable depth test
@@ -189,7 +188,7 @@ impl Renderer {
 
     pub fn draw(&mut self) {
         let model = Mat4::from_rotation_x(self.angle);
-        let view = Mat4::look_at_rh(self.eye, Vec3::new(0.0, 1.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
+        let view = Mat4::look_at_rh(*self.eye, Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0));
         let projection = Mat4::perspective_rh_gl(45.0f32.to_radians(), 1024.0 / 768.0, 0.1, 100.0);
         let transform = projection * view * model;
         

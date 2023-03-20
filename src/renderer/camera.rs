@@ -1,5 +1,5 @@
-use crate::models::position::Position;
+// use crate::models::position::Position;
 
-pub struct Camera {
-    pos: Position
-}
+// pub struct Camera {
+//     pos: Position
+// }
