@@ -10,7 +10,7 @@ const DEGRADS:f32 = std::f32::consts::PI / 180.0;
 
 impl Camera {
     pub fn new() -> Camera {
-        let pos = Vec3::new(3.0, 0.0, 3.0);
+        let pos = Vec3::new(1.5, 0.0, 1.5);
         let ang:f32 = 135.0 * DEGRADS;
         let x = ang.sin();
         let y = ang.cos();
@@ -29,5 +29,11 @@ impl Camera {
         let target = self.pos + Vec3::new(x, 0.0, y);
         self.target = target;
         self.ang = new_ang;
+    }
+
+    pub fn walk(&mut self, dir: f32) {
+        let old_target = self.target - self.pos;
+        self.pos = self.pos + Vec3::new(dir, 0.0, 0.0);
+        self.target = self.pos + old_target;
     }
 }

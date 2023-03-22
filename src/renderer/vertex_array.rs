@@ -31,8 +31,8 @@ impl VertexArray {
             size,
             gl::FLOAT,
             gl::FALSE,
-            3 * std::mem::size_of::<f32>() as GLint,
-            offset as *const _,
+            6 * std::mem::size_of::<f32>() as GLint,
+            (offset * std::mem::size_of::<f32>() as i32) as *const gl::types::GLvoid,
         );
         gl::EnableVertexAttribArray(attrib_pos);
     }

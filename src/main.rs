@@ -2,11 +2,13 @@ mod renderer;
 
 use std::ffi::CStr;
 use std::os::raw::c_void;
+use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::models::cube::Cube;
 use crate::renderer::Renderer;
 use crate::renderer::camera::Camera;
+use crate::renderer::texture::{Texture, TextureArray};
 use gl::types::{GLchar, GLenum, GLsizei, GLuint};
 use glam::Vec3;
 use glutin::dpi::{LogicalPosition, LogicalSize};
@@ -15,7 +17,10 @@ use glutin::event_loop::{ControlFlow, EventLoop};
 use glutin::monitor::MonitorHandle;
 use glutin::window::WindowBuilder;
 use glutin::{Api, ContextBuilder, GlRequest};
+use log::LevelFilter;
+use rand::rngs::ThreadRng;
 use simple_logger::SimpleLogger;
+use rand::Rng;
 
 mod models {
     pub mod cube;
@@ -27,15 +32,23 @@ const WINDOW_HEIGHT: u32 = 768;
 static mut DELTA_TIME: f64 = 0.0;
 static mut LAST_TIME: f64 = 0.0;
 
-const FIRST_ROOM: [[u16; 8]; 8] = [
-    [1, 1, 1, 1, 1, 1, 1, 1],
-    [1, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 2, 0, 0, 4, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 0, 0, 0, 3, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 1],
-    [1, 1, 1, 1, 1, 1, 1, 1],
+const FIRST_ROOM: [[u32; 16]; 16] = [
+    [40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40],
+    [40,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 40],
+    [40,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 40],
+    [40,  0,  0, 40, 40, 28, 40, 40,  0,  0,  0,  0,  0,  0,  0, 40],
+    [40,  0,  0, 40,  0,  0,  0, 28,  0,  0,  0,  0,  0,  0,  0, 40],
+    [40,  0,  0, 29,  0,  0,  0, 29,  0,  0,  0,  0,  0,  0,  0, 40],
+    [40,  0,  0, 28,  0,  0,  0, 45,  0,  0,  0,  0,  0,  0,  0, 40],
+    [40,  0,  0, 29,  0,  0,  0, 29,  0,  0,  0,  0,  0,  0,  0, 40],
+    [40,  0,  0, 40, 28, 45, 28, 40,  0,  0,  0,  0,  0,  0,  0, 40],
+    [40,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 40],
+    [40,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 40],
+    [40,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 40],
+    [40,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 40],
+    [40,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 40],
+    [40,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 40],
+    [40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40],
 ];
 
 fn get_center(monitor: MonitorHandle) -> LogicalPosition<u32> {
@@ -99,8 +112,31 @@ extern "system" fn debug_callback(
     );
 }
 
+fn get_rand_ceiling_tile(rng:&mut ThreadRng) -> u32 {
+    let n = rng.gen_range(0..10);
+    if n > 8 {
+        return 24;
+    } else if n > 4 && n > 7 {
+        return 12;
+    } else {
+        return 0;
+    }
+}
+
+fn get_rand_floor_tile(rng:&mut ThreadRng) -> u32 {
+    let n = rng.gen_range(0..10);
+    if n > 8 {
+        return 42;
+    } else if n > 4 && n <= 7 {
+        return 49;
+    } else {
+        return 48;
+    }
+}
+
 fn main() {
-    SimpleLogger::new().env().init().unwrap();
+    let mut rng = rand::thread_rng();
+    SimpleLogger::new().with_level(LevelFilter::Info).env().init().unwrap();
     log::info!("starting gpthack");
     let event_loop = EventLoop::new();
     let primary_monitor = match event_loop.primary_monitor() {
@@ -128,37 +164,47 @@ fn main() {
     unsafe {
         gl::Enable(gl::DEBUG_OUTPUT);
         gl::DebugMessageCallback(Some(debug_callback), std::ptr::null());
-    }
-
-    unsafe {
         LAST_TIME = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs_f64();
-        // gl::FrontFace(gl::CW);
-        // gl::CullFace(gl::BACK);
-        // gl::Enable(gl::CULL_FACE);
-        // gl::Enable(gl::DEPTH_TEST);
+    }
+
+    let texture;
+    unsafe {
+        log::info!("loading texture");
+        texture = TextureArray::new();
+        texture.load(Path::new("assets/tiles"));
     }
 
     let mut cubes: Vec<Cube> = Vec::new();
-    for (y, row) in FIRST_ROOM.iter().enumerate() {
-        for (x, _) in row.iter().enumerate() {
+    for y in 0..16 {
+        for x in 0..16 {
+            cubes.push(Cube::new(Vec3::new(x as f32, 1.0, y as f32), get_rand_ceiling_tile(&mut rng)));   // ceiling
             if FIRST_ROOM[y][x] > 0 {
-                let _x: i16 = 4 - (x as i16);
-                let _z: i16 = 4 - (y as i16);
-                cubes.push(Cube::new(Vec3::new(_x as f32, 0.0, _z as f32)));
+                cubes.push(Cube::new(Vec3::new(x as f32, 0.0, y as f32), FIRST_ROOM[y][x]));
             }
+            cubes.push(Cube::new(Vec3::new(x as f32, -1.0, y as f32), get_rand_floor_tile(&mut rng))); // floor
         }
     }
-
-    // cubes.push(Cube::new(Vec3::new(0.0, 0.0, 0.0)));
-    // cubes.push(Cube::new(Vec3::new(0.0, 1.0, 0.0)));
-    // cubes.push(Cube::new(Vec3::new(0.0, 2.0, 0.0)));
+    // for (y, row) in FIRST_ROOM.iter().enumerate() {
+    //     for (x, _) in row.iter().enumerate() {
+    //         if FIRST_ROOM[y][x] > 0 {
+    //             cubes.push(Cube::new(Vec3::new(x as f32, 1.0, y as f32), 1));   // ceiling
+    //             cubes.push(Cube::new(Vec3::new(x as f32, 0.0, y as f32), FIRST_ROOM[y][x]));
+    //             cubes.push(Cube::new(Vec3::new(x as f32, -1.0, y as f32), 1)); // floor
+    //         }
+    //     }
+    // }
 
     let mut camera = Camera::new();
 
     let mut renderer = Renderer::new(cubes).expect("Cannot create renderer");
+
+    unsafe {
+        texture.activate(gl::TEXTURE0);
+    }
+
     event_loop.run(move |event, _, control_flow| {
         // let next_frame_time =
         //     std::time::Instant::now() + std::time::Duration::from_nanos(16_666_667);
@@ -188,7 +234,7 @@ fn main() {
                 } => {
                     log::info!("left?");
                     // eye[0] += 1.0;
-                    camera.turn(10.0);
+                    camera.turn(2.0);
                 }
                 WindowEvent::KeyboardInput {
                     input:
@@ -200,7 +246,7 @@ fn main() {
                     ..
                 } => {
                     log::info!("right?");
-                    camera.turn(-10.0);
+                    camera.turn(-2.0);
                 }
                 WindowEvent::KeyboardInput {
                     input:
@@ -212,7 +258,7 @@ fn main() {
                     ..
                 } => {
                     log::info!("up?");
-                    // eye[1] += 1.0;
+                    camera.walk(1.0);
                 }
                 WindowEvent::KeyboardInput {
                     input:
@@ -224,7 +270,7 @@ fn main() {
                     ..
                 } => {
                     log::info!("down?");
-                    // eye[1] -= 1.0;
+                    camera.walk(-1.0);
                 }
                 WindowEvent::Resized(physical_size) => gl_context.resize(physical_size),
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,

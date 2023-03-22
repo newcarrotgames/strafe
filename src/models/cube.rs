@@ -29,53 +29,89 @@ use glam::Vec3;
 // ];
 
 #[rustfmt::skip]
-const CUBE_VERTICES: [f32; 24] = [
-    -0.5, -0.5,  0.5,
-    0.5, -0.5,  0.5,
-    0.5,  0.5,  0.5,
-    -0.5,  0.5,  0.5,
-    -0.5, -0.5, -0.5,
-    0.5, -0.5, -0.5,
-    0.5,  0.5, -0.5,
-    -0.5,  0.5, -0.5
+const TEXTURE_COORDS: [f32; 8] = [
+    0.0, 1.0,
+    1.0, 1.0,
+    1.0, 0.0,
+    0.0, 0.0
 ];
 
-// #[rustfmt::skip]
-// const CUBE_VERTICES: [f32; 24] = [
-//     4.0, 4.0, 6.0, 6.0, 4.0, 6.0, 6.0, 6.0, 6.0, 4.0, 6.0, 6.0, 4.0, 4.0, 4.0, 6.0, 4.0, 4.0, 6.0, 6.0, 4.0, 4.0, 6.0, 4.0
-// ];
+#[rustfmt::skip]
+const CUBE_VERTICES: [f32; 72] = [
+    -0.5, -0.5,  0.5,
+     0.5, -0.5,  0.5,
+     0.5,  0.5,  0.5,
+    -0.5,  0.5,  0.5,
+    -0.5,  0.5,  0.5,
+     0.5,  0.5,  0.5,
+     0.5,  0.5, -0.5,
+    -0.5,  0.5, -0.5,
+     0.5, -0.5, -0.5,
+    -0.5, -0.5, -0.5,
+    -0.5,  0.5, -0.5,
+     0.5,  0.5, -0.5,
+    -0.5, -0.5, -0.5,
+     0.5, -0.5, -0.5,
+     0.5, -0.5,  0.5,
+    -0.5, -0.5,  0.5,
+    -0.5, -0.5, -0.5,
+    -0.5, -0.5,  0.5,
+    -0.5,  0.5,  0.5,
+    -0.5,  0.5, -0.5,
+     0.5, -0.5,  0.5,
+     0.5, -0.5, -0.5,
+     0.5,  0.5, -0.5,
+     0.5,  0.5,  0.5,
+];
 
 pub struct Cube {
     loc: Vec3,
-    geom: [f32; 24],
+    geom: [f32; 144],
+    texture_id: u32,
 }
 
-fn get_vertices(loc: Vec3) -> [f32; 24] {
-    let mut x:[f32; 24] = [0.0; 24];
-    x[..24].clone_from_slice(&CUBE_VERTICES);
-    println!("{:?}", x);
+// interleave cube verts with texture coords
+#[rustfmt::skip]
+fn get_vertices(loc: Vec3, tex_id: u32) -> [f32; 144] {
+    let mut x:[f32; 144] = [0.0; 144];
     let mut i = 0;
     while i < 24 {
-        x[i] += loc[0];
-        x[i+1] += loc[1];
-        x[i+2] += loc[2];
-        i += 3;
+        let xi = i * 6;
+        let vi = i * 3;
+        let ti = (i % 4) * 2;
+
+        // cube vertices
+        x[xi]   = CUBE_VERTICES[vi]   + loc[0];
+        x[xi+1] = CUBE_VERTICES[vi+1] + loc[1];
+        x[xi+2] = CUBE_VERTICES[vi+2] + loc[2];
+
+        // texture coordinates
+        x[xi+3] = TEXTURE_COORDS[ti];
+        x[xi+4] = TEXTURE_COORDS[ti+1];
+
+        // texture array index
+        x[xi+5] = tex_id as f32;
+
+        i += 1;
+
+        // log::info!("x: {}, {}, {}, {}, {}", x[xi], x[xi + 1], x[xi + 2], x[xi + 3], x[xi + 4]);
     }
-    log::info!("get_vertices: {}", format!("{:?}", x));
+    log::debug!("get_vertices: {}", format!("{:?}", x));
     return x;
 }
 
 impl Cube {
-    pub fn new(loc: Vec3) -> Self {
-        log::info!("new cube");
-        let g = get_vertices(loc);
+    pub fn new(loc: Vec3, texture_id: u32) -> Self {
+        log::debug!("new cube");
+        let g = get_vertices(loc, texture_id);
         Self {
             loc,
             geom: g,
+            texture_id,
         }
     }
 
-    pub fn geom(&self) -> [f32; 24] {
+    pub fn geom(&self) -> [f32; 144] {
         return self.geom;
     }
 
