@@ -1,2 +1,1 @@
-mod cube;
-mod position;
+pub mod cube;

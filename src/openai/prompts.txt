@@ -1,0 +1,1 @@
+LEVEL_CREATURES=Please provide a comma-separated list of the types of creatures you would expect to find in the [LEVEL_INDEX] level of a roguelike dungeon:

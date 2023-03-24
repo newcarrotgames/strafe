@@ -1,14 +1,17 @@
 mod renderer;
+mod models;
+mod level;
 
 use std::ffi::CStr;
 use std::os::raw::c_void;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::level::level::Level;
 use crate::models::cube::Cube;
 use crate::renderer::Renderer;
 use crate::renderer::camera::Camera;
-use crate::renderer::texture::{Texture, TextureArray};
+use crate::renderer::texture::{TextureArray};
 use gl::types::{GLchar, GLenum, GLsizei, GLuint};
 use glam::Vec3;
 use glutin::dpi::{LogicalPosition, LogicalSize};
@@ -22,34 +25,11 @@ use rand::rngs::ThreadRng;
 use simple_logger::SimpleLogger;
 use rand::Rng;
 
-mod models {
-    pub mod cube;
-}
-
 const WINDOW_WIDTH: u32 = 1024;
 const WINDOW_HEIGHT: u32 = 768;
 
 static mut DELTA_TIME: f64 = 0.0;
 static mut LAST_TIME: f64 = 0.0;
-
-const FIRST_ROOM: [[u32; 16]; 16] = [
-    [40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40],
-    [40,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 40],
-    [40,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 40],
-    [40,  0,  0, 40, 40, 28, 40, 40,  0,  0,  0,  0,  0,  0,  0, 40],
-    [40,  0,  0, 40,  0,  0,  0, 28,  0,  0,  0,  0,  0,  0,  0, 40],
-    [40,  0,  0, 29,  0,  0,  0, 29,  0,  0,  0,  0,  0,  0,  0, 40],
-    [40,  0,  0, 28,  0,  0,  0, 45,  0,  0,  0,  0,  0,  0,  0, 40],
-    [40,  0,  0, 29,  0,  0,  0, 29,  0,  0,  0,  0,  0,  0,  0, 40],
-    [40,  0,  0, 40, 28, 45, 28, 40,  0,  0,  0,  0,  0,  0,  0, 40],
-    [40,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 40],
-    [40,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 40],
-    [40,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 40],
-    [40,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 40],
-    [40,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 40],
-    [40,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 40],
-    [40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40],
-];
 
 fn get_center(monitor: MonitorHandle) -> LogicalPosition<u32> {
     let monitor_size = monitor.size();
@@ -177,27 +157,20 @@ fn main() {
         texture.load(Path::new("assets/tiles"));
     }
 
+    let level = Level::new();
+
     let mut cubes: Vec<Cube> = Vec::new();
-    for y in 0..16 {
-        for x in 0..16 {
+    for y in 0..64 {
+        for x in 0..64 {
             cubes.push(Cube::new(Vec3::new(x as f32, 1.0, y as f32), get_rand_ceiling_tile(&mut rng)));   // ceiling
-            if FIRST_ROOM[y][x] > 0 {
-                cubes.push(Cube::new(Vec3::new(x as f32, 0.0, y as f32), FIRST_ROOM[y][x]));
+            if level.data[y][x] > 0 {
+                cubes.push(Cube::new(Vec3::new(x as f32, 0.0, y as f32), level.data[y][x]));
             }
             cubes.push(Cube::new(Vec3::new(x as f32, -1.0, y as f32), get_rand_floor_tile(&mut rng))); // floor
         }
     }
-    // for (y, row) in FIRST_ROOM.iter().enumerate() {
-    //     for (x, _) in row.iter().enumerate() {
-    //         if FIRST_ROOM[y][x] > 0 {
-    //             cubes.push(Cube::new(Vec3::new(x as f32, 1.0, y as f32), 1));   // ceiling
-    //             cubes.push(Cube::new(Vec3::new(x as f32, 0.0, y as f32), FIRST_ROOM[y][x]));
-    //             cubes.push(Cube::new(Vec3::new(x as f32, -1.0, y as f32), 1)); // floor
-    //         }
-    //     }
-    // }
 
-    let mut camera = Camera::new();
+    let mut camera = Camera::new(level.spawn);
 
     let mut renderer = Renderer::new(cubes).expect("Cannot create renderer");
 
@@ -234,7 +207,7 @@ fn main() {
                 } => {
                     log::info!("left?");
                     // eye[0] += 1.0;
-                    camera.turn(2.0);
+                    camera.turn(15.0);
                 }
                 WindowEvent::KeyboardInput {
                     input:
@@ -246,7 +219,7 @@ fn main() {
                     ..
                 } => {
                     log::info!("right?");
-                    camera.turn(-2.0);
+                    camera.turn(-15.0);
                 }
                 WindowEvent::KeyboardInput {
                     input:
@@ -258,7 +231,7 @@ fn main() {
                     ..
                 } => {
                     log::info!("up?");
-                    camera.walk(1.0);
+                    camera.walk(1);
                 }
                 WindowEvent::KeyboardInput {
                     input:
@@ -270,7 +243,7 @@ fn main() {
                     ..
                 } => {
                     log::info!("down?");
-                    camera.walk(-1.0);
+                    camera.walk(-1);
                 }
                 WindowEvent::Resized(physical_size) => gl_context.resize(physical_size),
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,

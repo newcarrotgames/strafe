@@ -1,6 +1,6 @@
 use gl::types::*;
 use image::{EncodableLayout, ImageError};
-use std::{env, error::Error, fs::read_dir, path::Path, ptr::null};
+use std::{env, fs::read_dir, path::Path};
 use walkdir::WalkDir;
 
 pub struct Texture {
