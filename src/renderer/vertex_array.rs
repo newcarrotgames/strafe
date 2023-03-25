@@ -16,6 +16,7 @@ impl VertexArray {
     pub unsafe fn new() -> Self {
         let mut id: GLuint = 0;
         gl::GenVertexArrays(1, &mut id);
+        log::info!("created vertex array with id {}", id);
         Self { id }
     }
 
@@ -24,14 +25,16 @@ impl VertexArray {
         attrib_pos: GLuint,
         size: GLint,
         offset: GLint,
+        stride: GLint,
     ) {
+        log::info!("set attribute: {} {} {} {}", attrib_pos, size, offset, stride);
         self.bind();
         gl::VertexAttribPointer(
             attrib_pos,
             size,
             gl::FLOAT,
             gl::FALSE,
-            6 * std::mem::size_of::<f32>() as GLint,
+            stride,
             (offset * std::mem::size_of::<f32>() as i32) as *const gl::types::GLvoid,
         );
         gl::EnableVertexAttribArray(attrib_pos);

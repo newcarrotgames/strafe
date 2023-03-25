@@ -1,5 +1,5 @@
 use gl::types::*;
-use image::{EncodableLayout, ImageError};
+use image::{EncodableLayout, ImageError, RgbaImage};
 use std::{env, fs::read_dir, path::Path};
 use walkdir::WalkDir;
 
@@ -71,6 +71,7 @@ impl TextureArray {
     pub unsafe fn new() -> Self {
         let mut id: GLuint = 0;
         gl::GenTextures(1, &mut id);
+        log::info!("created texture array with id {}", id);
         Self { id }
     }
 
@@ -151,6 +152,66 @@ impl TextureArray {
 }
 
 impl Drop for TextureArray {
+    fn drop(&mut self) {
+        unsafe {
+            gl::DeleteTextures(1, [self.id].as_ptr());
+        }
+    }
+}
+
+pub struct UITexture {
+    pub id: GLuint,
+}
+
+impl UITexture {
+    pub unsafe fn new() -> Self {
+        let mut id: GLuint = 0;
+        gl::GenTextures(1, &mut id);
+        log::info!("created UI texture with id {}", id);
+        Self { id }
+    }
+
+    pub unsafe fn load(&self, img: &RgbaImage) {
+        self.bind();
+        gl::TexImage2D(
+            gl::TEXTURE_2D,
+            0,
+            gl::RGBA as i32,
+            img.width() as i32,
+            img.height() as i32,
+            0,
+            gl::RGBA,
+            gl::UNSIGNED_BYTE,
+            img.as_bytes().as_ptr() as *const _,
+        );
+        log::info!("loaded img width: {}, height: {}", img.width(), img.height());
+        self.set_filtering(gl::NEAREST);
+        self.set_wrapping(gl::REPEAT);
+    }
+
+    pub unsafe fn set_wrapping(&self, mode: GLuint) {
+        self.bind();
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, mode as GLint);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, mode as GLint);
+    }
+
+    pub unsafe fn set_filtering(&self, mode: GLuint) {
+        self.bind();
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, mode as GLint);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, mode as GLint);
+    }
+
+    pub unsafe fn bind(&self) {
+        gl::BindTexture(gl::TEXTURE_2D, self.id)
+    }
+
+    pub unsafe fn activate(&self, unit: GLuint) {
+        gl::ActiveTexture(unit);
+        self.bind();
+    }
+}
+
+impl Drop for UITexture {
     fn drop(&mut self) {
         unsafe {
             gl::DeleteTextures(1, [self.id].as_ptr());

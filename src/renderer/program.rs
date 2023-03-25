@@ -42,7 +42,6 @@ impl ShaderProgram {
                 &mut error_log_size,
                 error_log.as_mut_ptr() as *mut _,
             );
-
             error_log.set_len(error_log_size as usize);
             let log = String::from_utf8(error_log)?;
             Err(ShaderError::LinkingError(log))
@@ -50,11 +49,13 @@ impl ShaderProgram {
     }
 
     pub unsafe fn apply(&self) {
+        log::debug!("using program {}", self.id);
         gl::UseProgram(self.id);
     }
 
     pub unsafe fn get_attrib_location(&self, attrib: &str) -> Result<GLuint, ShaderError> {
         let attrib = CString::new(attrib)?;
+        log::debug!("attrib: {}", format!("{:?}", attrib));
         Ok(gl::GetAttribLocation(self.id, attrib.as_ptr()) as GLuint)
     }
 
@@ -66,7 +67,7 @@ impl ShaderProgram {
     // }
 
     pub unsafe fn set_mat4_uniform(&self, name: &str, value: Mat4) -> Result<(), ShaderError> {
-        self.apply();
+        // self.apply(); this function assumes you've called apply already
         let uniform = CString::new(name)?;
         let location_pos = gl::GetUniformLocation(self.id, uniform.as_ptr());
         gl::UniformMatrix4fv(location_pos, 1, gl::FALSE, &value.to_cols_array()[0]);

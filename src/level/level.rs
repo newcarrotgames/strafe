@@ -20,4 +20,9 @@ impl Level {
             spawn: [1, 1],
         }
     }
+
+    pub fn build(&self) {
+        // place first room with player spawn
+        
+    }
 }

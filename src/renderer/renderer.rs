@@ -3,12 +3,15 @@ use crate::renderer::buffer::Buffer;
 use crate::renderer::program::ShaderProgram;
 use crate::renderer::shader::{Shader, ShaderError};
 use crate::renderer::vertex_array::VertexArray;
+use gl::types::GLint;
 use glam::{Mat4, Vec3};
 use image::ImageError;
 use std::ptr;
 use thiserror::Error;
 
 use super::camera::Camera;
+use super::texture::UITexture;
+// use super::texture::{Texture, UITexture};
 
 // const VERTEX_SHADER_SOURCE: &str = r#"
 // #version 330
@@ -64,64 +67,46 @@ in vec3 UV;
 out vec4 color;
 
 uniform sampler2DArray t2da;
+// uniform sampler2D uiTexture;
 
 void main() {
     color = texture(t2da, UV);
 }
 "#;
 
+//------------\\
+// UI SHADERS \\
+//------------\\
 
-// #[rustfmt::skip]
-// const CUBE_VERTICES: [f32; 24] = [
-//     -1.0, -1.0,  1.0,
-//     1.0, -1.0,  1.0,
-//     1.0,  1.0,  1.0,
-//     -1.0,  1.0,  1.0,
-//     -1.0, -1.0, -1.0,
-//     1.0, -1.0, -1.0,
-//     1.0,  1.0, -1.0,
-//     -1.0,  1.0, -1.0
-// ];
+const UI_VERTEX_SHADER_SOURCE: &str = r#"
+#version 330 core
 
-// #[rustfmt::skip]
-// const CUBE_COLORS: [f32; 24] = [
-//     0.0, 0.0, 0.0,
-//     1.0, 0.0, 0.0,
-//     1.0, 1.0, 0.0,
-//     0.0, 1.0, 0.0,
-//     0.0, 0.0, 1.0,
-//     1.0, 0.0, 1.0,
-//     1.0, 1.0, 1.0,
-//     0.0, 1.0, 1.0
-// ];
+layout(location = 0) in vec2 position;
+layout(location = 1) in vec2 vertexUV;
 
-// #[rustfmt::skip]
-// const CUBE_COLORS: [f32; 24] = [
-//     0.0, 0.0, 0.0,
-//     0.5, 0.0, 0.0,
-//     1.0, 1.0, 0.0,
-//     0.0, 0.5, 0.0,
-//     0.0, 0.0, 1.0,
-//     0.5, 0.0, 1.0,
-//     0.5, 1.0, 1.0,
-//     0.0, 1.0, 1.0
-// ];
+out vec2 UV;
 
-// #[rustfmt::skip]
-// const CUBE_INDICES: [i32; 36] = [
-//     0, 1, 2,
-//     2, 3, 0,
-//     1, 5, 6,
-//     6, 2, 1,
-//     7, 6, 5,
-//     5, 4, 7,
-//     4, 0, 3,
-//     3, 7, 4,
-//     4, 5, 1,
-//     1, 0, 4,
-//     3, 2, 6,
-//     6, 7, 3
-// ];
+void main() {
+    gl_Position = vec4(position.x, position.y, 0.0, 1.0);
+    UV = vertexUV;
+}
+"#;
+
+const UI_FRAGMENT_SHADER_SOURCE: &str = r#"
+#version 420
+
+in vec2 UV;
+
+out vec4 color;
+
+// uniform sampler2DArray t2da;
+layout (binding = 1) uniform sampler2D texture1;
+
+void main() {
+    // color = vec4(1.0, 0.5, 0.2, 0.5);
+    color = texture(texture1, UV);
+}
+"#;
 
 #[rustfmt::skip]
 const CUBE_INDICES: [i32; 36] = [
@@ -139,6 +124,20 @@ const CUBE_INDICES: [i32; 36] = [
     22, 23, 20,
 ];
 
+#[rustfmt::skip]
+const UI_VERTICES: [f32; 16] = [
+	 1.0,  1.0,	0.0,  1.0,
+	 1.0, -1.0, 1.0,  1.0, 	
+    -1.0, -1.0,	0.0,  0.0, 	
+	-1.0,  1.0, 1.0,  0.0
+];
+
+#[rustfmt::skip]
+const UI_INDICES: [i32; 6] = [
+    0, 1, 3, 
+    1, 2, 3
+];
+
 #[derive(Debug, Error)]
 pub enum RendererInitError {
     #[error{"{0}"}]
@@ -151,8 +150,11 @@ pub struct Renderer {
     program: ShaderProgram,
     _vertex_buffer: Buffer,
     _index_buffer: Buffer,
-    // _color_buffer: Buffer,
     vertex_array: VertexArray,
+    ui_program: ShaderProgram,
+    _ui_vertex_buffer: Buffer,
+    _ui_index_buffer: Buffer,
+    ui_vertex_array: VertexArray,
     angle: f32,
     total_length: i32,
 }
@@ -172,6 +174,7 @@ fn get_indices(index: i32) -> [i32; 36] {
 impl Renderer {
     pub fn new(cubes: Vec<Cube>) -> Result<Self, RendererInitError> {
         unsafe {
+            // Level shader program and buffers
             let vertex_shader = Shader::new(VERTEX_SHADER_SOURCE, gl::VERTEX_SHADER)?;
             let fragment_shader = Shader::new(FRAGMENT_SHADER_SOURCE, gl::FRAGMENT_SHADER)?;
             let program = ShaderProgram::new(&[vertex_shader, fragment_shader])?;
@@ -198,61 +201,104 @@ impl Renderer {
             vertex_buffer.set_data(&verts, gl::STATIC_DRAW);
             index_buffer.set_data(&indices, gl::STATIC_DRAW);
 
-            vertex_buffer.bind();
             let pos_attrib = program.get_attrib_location("position")?;
-            vertex_array.set_attribute(pos_attrib, 3, 0);
+            vertex_array.set_attribute(pos_attrib, 3, 0, 6 * std::mem::size_of::<f32>() as GLint);
 
             let texture_attrib = program.get_attrib_location("vertexUV")?;
-            vertex_array.set_attribute(texture_attrib, 3, 3);
+            vertex_array.set_attribute(
+                texture_attrib,
+                3,
+                3,
+                6 * std::mem::size_of::<f32>() as GLint,
+            );
 
-            vertex_buffer.unbind();
-            vertex_array.unbind();
-
-            let angle = 0.0; // std::f32::consts::PI / 1.0;
-
-            // Enable depth test
-            gl::Enable(gl::DEPTH_TEST);
-
-            // Accept fragment if it closer to the camera than the former one
-            gl::DepthFunc(gl::LESS);
+            // vertex_array.unbind();
 
             let total_length = (cubes.len() * 72) as i32;
 
-            log::info!("renderer done, total_length: {}", total_length);
+            // UI shader program and buffers
+            let ui_vertex_shader = Shader::new(UI_VERTEX_SHADER_SOURCE, gl::VERTEX_SHADER)?;
+            let ui_fragment_shader = Shader::new(UI_FRAGMENT_SHADER_SOURCE, gl::FRAGMENT_SHADER)?;
+            let ui_program = ShaderProgram::new(&[ui_vertex_shader, ui_fragment_shader])?;
 
-            // gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
-            // gl::Enable(gl::BLEND);
+            let ui_vertex_array = VertexArray::new();
+            ui_vertex_array.bind();
+
+            let ui_vertex_buffer = Buffer::new(gl::ARRAY_BUFFER);
+            let ui_index_buffer = Buffer::new(gl::ELEMENT_ARRAY_BUFFER);
+
+            ui_vertex_buffer.set_data(&UI_VERTICES, gl::STATIC_DRAW);
+            ui_index_buffer.set_data(&UI_INDICES, gl::STATIC_DRAW);
+
+            // ui_vertex_buffer.bind();
+            // let ui_pos_attrib = ui_program.get_attrib_location("position")?;
+            ui_vertex_array.set_attribute(0, 2, 0, 4 * std::mem::size_of::<f32>() as GLint);
+
+            // let ui_texture_attrib = ui_program.get_attrib_location("vertexUV")?;
+            ui_vertex_array.set_attribute(1, 2, 2, 4 * std::mem::size_of::<f32>() as GLint);
+
+            // ui_vertex_array.unbind();
+
+            gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
+            gl::Enable(gl::BLEND);
+
+            log::info!("returning renderer");
 
             Ok(Self {
                 program,
                 _vertex_buffer: vertex_buffer,
                 _index_buffer: index_buffer,
-                // _color_buffer: color_buffer,
                 vertex_array,
-                angle,
+                ui_program,
+                _ui_vertex_buffer: ui_vertex_buffer,
+                _ui_index_buffer: ui_index_buffer,
+                ui_vertex_array,
+                angle: 0.0,
                 total_length,
             })
         }
     }
 
-    pub fn draw(&mut self, cam: &Camera) {
+    pub fn draw(&mut self, cam: &Camera, ui: &UITexture, display_ui: &bool) {
         let model = Mat4::from_rotation_x(self.angle);
         let view = Mat4::look_at_rh(cam.pos, cam.target, Vec3::new(0.0, 1.0, 0.0));
         let projection = Mat4::perspective_rh_gl(45.0f32.to_radians(), 1024.0 / 768.0, 0.1, 2000.0);
         let transform = projection * view * model;
 
         unsafe {
+            // clear screen
             gl::ClearColor(0.0, 0.0, 0.0, 1.0);
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+
+            // self.ui_vertex_array.unbind();
+
+            // log::info!("rendering level");
+
+            // render level
+            self.program.apply();
             self.vertex_array.bind();
             let _ = self.program.set_mat4_uniform("transform", transform);
-            self.program.apply();
+            gl::Enable(gl::DEPTH_TEST);
+            gl::DepthFunc(gl::LESS);
             gl::DrawElements(
                 gl::TRIANGLES,
                 self.total_length,
                 gl::UNSIGNED_INT,
                 ptr::null(),
             );
+
+            // self.vertex_array.unbind();
+
+            // log::info!("rendering ui");
+
+            // render UI
+            if *display_ui {
+                gl::Disable(gl::DEPTH_TEST);
+                self.ui_program.apply();
+                self.ui_vertex_array.bind();
+                ui.activate(gl::TEXTURE1);
+                gl::DrawElements(gl::TRIANGLES, 8, gl::UNSIGNED_INT, ptr::null());
+            }
         }
     }
 }

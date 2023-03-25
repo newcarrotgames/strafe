@@ -1,6 +1,6 @@
-mod renderer;
-mod models;
 mod level;
+mod models;
+mod renderer;
 
 use std::ffi::CStr;
 use std::os::raw::c_void;
@@ -9,9 +9,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::level::level::Level;
 use crate::models::cube::Cube;
-use crate::renderer::Renderer;
 use crate::renderer::camera::Camera;
-use crate::renderer::texture::{TextureArray};
+use crate::renderer::texture::{TextureArray, UITexture};
+use crate::renderer::Renderer;
 use gl::types::{GLchar, GLenum, GLsizei, GLuint};
 use glam::Vec3;
 use glutin::dpi::{LogicalPosition, LogicalSize};
@@ -22,8 +22,10 @@ use glutin::window::WindowBuilder;
 use glutin::{Api, ContextBuilder, GlRequest};
 use log::LevelFilter;
 use rand::rngs::ThreadRng;
-use simple_logger::SimpleLogger;
 use rand::Rng;
+use simple_logger::SimpleLogger;
+
+use image::{Rgba, RgbaImage, EncodableLayout};
 
 const WINDOW_WIDTH: u32 = 1024;
 const WINDOW_HEIGHT: u32 = 768;
@@ -92,7 +94,7 @@ extern "system" fn debug_callback(
     );
 }
 
-fn get_rand_ceiling_tile(rng:&mut ThreadRng) -> u32 {
+fn get_rand_ceiling_tile(rng: &mut ThreadRng) -> u32 {
     let n = rng.gen_range(0..10);
     if n > 8 {
         return 24;
@@ -103,7 +105,7 @@ fn get_rand_ceiling_tile(rng:&mut ThreadRng) -> u32 {
     }
 }
 
-fn get_rand_floor_tile(rng:&mut ThreadRng) -> u32 {
+fn get_rand_floor_tile(rng: &mut ThreadRng) -> u32 {
     let n = rng.gen_range(0..10);
     if n > 8 {
         return 42;
@@ -116,7 +118,11 @@ fn get_rand_floor_tile(rng:&mut ThreadRng) -> u32 {
 
 fn main() {
     let mut rng = rand::thread_rng();
-    SimpleLogger::new().with_level(LevelFilter::Info).env().init().unwrap();
+    SimpleLogger::new()
+        .with_level(LevelFilter::Info)
+        .env()
+        .init()
+        .unwrap();
     log::info!("starting gpthack");
     let event_loop = EventLoop::new();
     let primary_monitor = match event_loop.primary_monitor() {
@@ -150,9 +156,14 @@ fn main() {
             .as_secs_f64();
     }
 
+    unsafe {
+        // gl::Enable(gl::TEXTURE_2D);
+        gl::ActiveTexture(gl::TEXTURE0);
+    }
+
     let texture;
     unsafe {
-        log::info!("loading texture");
+        log::info!("loading tiles");
         texture = TextureArray::new();
         texture.load(Path::new("assets/tiles"));
     }
@@ -162,11 +173,20 @@ fn main() {
     let mut cubes: Vec<Cube> = Vec::new();
     for y in 0..64 {
         for x in 0..64 {
-            cubes.push(Cube::new(Vec3::new(x as f32, 1.0, y as f32), get_rand_ceiling_tile(&mut rng)));   // ceiling
+            cubes.push(Cube::new(
+                Vec3::new(x as f32, 1.0, y as f32),
+                get_rand_ceiling_tile(&mut rng),
+            )); // ceiling
             if level.data[y][x] > 0 {
-                cubes.push(Cube::new(Vec3::new(x as f32, 0.0, y as f32), level.data[y][x]));
+                cubes.push(Cube::new(
+                    Vec3::new(x as f32, 0.0, y as f32),
+                    level.data[y][x],
+                ));
             }
-            cubes.push(Cube::new(Vec3::new(x as f32, -1.0, y as f32), get_rand_floor_tile(&mut rng))); // floor
+            cubes.push(Cube::new(
+                Vec3::new(x as f32, -1.0, y as f32),
+                get_rand_floor_tile(&mut rng),
+            )); // floor
         }
     }
 
@@ -175,8 +195,32 @@ fn main() {
     let mut renderer = Renderer::new(cubes).expect("Cannot create renderer");
 
     unsafe {
-        texture.activate(gl::TEXTURE0);
+        // gl::Enable(gl::TEXTURE_2D);
+        gl::ActiveTexture(gl::TEXTURE1);
     }
+
+    let ui = unsafe { UITexture::new() };
+    log::info!("created UI texture with id {}", ui.id);
+    let mut img = RgbaImage::new(16, 16);
+
+    for x in 0..16 {
+        for y in 0..16 {
+            img.put_pixel(x, y, Rgba([255, 0, 255, 128]));
+        }
+    }
+
+    match image::save_buffer(&Path::new("ui.png"), img.as_bytes(), 16, 16, image::ColorType::Rgba8) {
+        Ok(_) => log::info!("saved image"),
+        Err(_) => log::info!("could not save image"),
+    };
+
+    unsafe {
+        ui.load(&img);
+    };
+
+    log::info!("starting game loop");
+
+    let mut display_ui = true;
 
     event_loop.run(move |event, _, control_flow| {
         // let next_frame_time =
@@ -245,6 +289,18 @@ fn main() {
                     log::info!("down?");
                     camera.walk(-1);
                 }
+                WindowEvent::KeyboardInput {
+                    input:
+                        KeyboardInput {
+                            state: ElementState::Pressed,
+                            virtual_keycode: Some(glutin::event::VirtualKeyCode::U),
+                            ..
+                        },
+                    ..
+                } => {
+                    display_ui = !display_ui;
+                    log::info!("ui is {}", display_ui);
+                }
                 WindowEvent::Resized(physical_size) => gl_context.resize(physical_size),
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
                 _ => (),
@@ -253,7 +309,7 @@ fn main() {
                 gl_context.window().request_redraw();
             }
             Event::RedrawRequested(_) => {
-                renderer.draw(&camera);
+                renderer.draw(&camera, &ui, &display_ui);
                 gl_context.swap_buffers().unwrap();
             }
             _ => (),
