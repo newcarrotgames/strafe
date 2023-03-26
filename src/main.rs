@@ -1,6 +1,7 @@
 mod level;
 mod models;
 mod renderer;
+mod ui;
 
 use std::ffi::CStr;
 use std::os::raw::c_void;
@@ -10,8 +11,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::level::level::Level;
 use crate::models::cube::Cube;
 use crate::renderer::camera::Camera;
-use crate::renderer::texture::{TextureArray, UITexture};
+use crate::renderer::texture::{TextureArray};
 use crate::renderer::Renderer;
+use crate::ui::ui::UserInterface;
 use gl::types::{GLchar, GLenum, GLsizei, GLuint};
 use glam::Vec3;
 use glutin::dpi::{LogicalPosition, LogicalSize};
@@ -23,9 +25,8 @@ use glutin::{Api, ContextBuilder, GlRequest};
 use log::LevelFilter;
 use rand::rngs::ThreadRng;
 use rand::Rng;
-use simple_logger::SimpleLogger;
 
-use image::{Rgba, RgbaImage, EncodableLayout};
+use simple_logger::SimpleLogger;
 
 const WINDOW_WIDTH: u32 = 1024;
 const WINDOW_HEIGHT: u32 = 768;
@@ -168,7 +169,8 @@ fn main() {
         texture.load(Path::new("assets/tiles"));
     }
 
-    let level = Level::new();
+    let mut level = Level::new();
+    level.build();
 
     let mut cubes: Vec<Cube> = Vec::new();
     for y in 0..64 {
@@ -191,37 +193,10 @@ fn main() {
     }
 
     let mut camera = Camera::new(level.spawn);
-
-    let mut renderer = Renderer::new(cubes).expect("Cannot create renderer");
-
-    unsafe {
-        // gl::Enable(gl::TEXTURE_2D);
-        gl::ActiveTexture(gl::TEXTURE1);
-    }
-
-    let ui = unsafe { UITexture::new() };
-    log::info!("created UI texture with id {}", ui.id);
-    let mut img = RgbaImage::new(16, 16);
-
-    for x in 0..16 {
-        for y in 0..16 {
-            img.put_pixel(x, y, Rgba([255, 0, 255, 128]));
-        }
-    }
-
-    match image::save_buffer(&Path::new("ui.png"), img.as_bytes(), 16, 16, image::ColorType::Rgba8) {
-        Ok(_) => log::info!("saved image"),
-        Err(_) => log::info!("could not save image"),
-    };
-
-    unsafe {
-        ui.load(&img);
-    };
+    let mut ui = UserInterface::new([WINDOW_HEIGHT, WINDOW_WIDTH]);
+    let mut renderer = Renderer::new(cubes, ui).expect("Cannot create renderer");
 
     log::info!("starting game loop");
-
-    let mut display_ui = true;
-
     event_loop.run(move |event, _, control_flow| {
         // let next_frame_time =
         //     std::time::Instant::now() + std::time::Duration::from_nanos(16_666_667);
@@ -251,7 +226,7 @@ fn main() {
                 } => {
                     log::info!("left?");
                     // eye[0] += 1.0;
-                    camera.turn(15.0);
+                    camera.turn(45.0);
                 }
                 WindowEvent::KeyboardInput {
                     input:
@@ -263,7 +238,7 @@ fn main() {
                     ..
                 } => {
                     log::info!("right?");
-                    camera.turn(-15.0);
+                    camera.turn(-45.0);
                 }
                 WindowEvent::KeyboardInput {
                     input:
@@ -289,18 +264,6 @@ fn main() {
                     log::info!("down?");
                     camera.walk(-1);
                 }
-                WindowEvent::KeyboardInput {
-                    input:
-                        KeyboardInput {
-                            state: ElementState::Pressed,
-                            virtual_keycode: Some(glutin::event::VirtualKeyCode::U),
-                            ..
-                        },
-                    ..
-                } => {
-                    display_ui = !display_ui;
-                    log::info!("ui is {}", display_ui);
-                }
                 WindowEvent::Resized(physical_size) => gl_context.resize(physical_size),
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
                 _ => (),
@@ -309,7 +272,7 @@ fn main() {
                 gl_context.window().request_redraw();
             }
             Event::RedrawRequested(_) => {
-                renderer.draw(&camera, &ui, &display_ui);
+                renderer.draw(&camera);
                 gl_context.swap_buffers().unwrap();
             }
             _ => (),

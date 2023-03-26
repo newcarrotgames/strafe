@@ -1,0 +1,2 @@
+TILES=[TYPE] tile for use in roguelike dungeon crawler game pixel art
+ALT_TILES=tile for use in roguelike dungeon crawler game pixel art with the following description: [TYPE] # example: wooden door with stone frame

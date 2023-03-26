@@ -3,6 +3,7 @@ use crate::renderer::buffer::Buffer;
 use crate::renderer::program::ShaderProgram;
 use crate::renderer::shader::{Shader, ShaderError};
 use crate::renderer::vertex_array::VertexArray;
+use crate::ui::ui::UserInterface;
 use gl::types::GLint;
 use glam::{Mat4, Vec3};
 use image::ImageError;
@@ -10,7 +11,6 @@ use std::ptr;
 use thiserror::Error;
 
 use super::camera::Camera;
-use super::texture::UITexture;
 // use super::texture::{Texture, UITexture};
 
 // const VERTEX_SHADER_SOURCE: &str = r#"
@@ -124,13 +124,29 @@ const CUBE_INDICES: [i32; 36] = [
     22, 23, 20,
 ];
 
+// #[rustfmt::skip]
+// const UI_VERTICES: [f32; 16] = [
+// 	 1.0,  1.0,	1.0,  1.0,
+// 	 1.0, -1.0, 1.0,  0.0,
+//     -1.0, -1.0,	0.0,  0.0,
+// 	-1.0,  1.0, 0.0,  1.0,
+// ];
+
 #[rustfmt::skip]
 const UI_VERTICES: [f32; 16] = [
-	 1.0,  1.0,	0.0,  1.0,
-	 1.0, -1.0, 1.0,  1.0, 	
-    -1.0, -1.0,	0.0,  0.0, 	
-	-1.0,  1.0, 1.0,  0.0
+	 1.0,  1.0,	1.0,  0.0,
+	 1.0, -1.0, 1.0,  1.0,
+    -1.0, -1.0,	0.0,  1.0,
+	-1.0,  1.0, 0.0,  0.0,
 ];
+
+// #[rustfmt::skip]
+// const UI_VERTICES: [f32; 16] = [
+// 	 1.0,  1.0,	0.0,  1.0,
+// 	 1.0, -1.0, 0.0,  0.0,
+//     -1.0, -1.0,	1.0,  0.0,
+// 	-1.0,  1.0, 1.0,  1.0,
+// ];
 
 #[rustfmt::skip]
 const UI_INDICES: [i32; 6] = [
@@ -157,6 +173,7 @@ pub struct Renderer {
     ui_vertex_array: VertexArray,
     angle: f32,
     total_length: i32,
+    ui: UserInterface,
 }
 
 // todo: put this in the cube impl
@@ -172,7 +189,7 @@ fn get_indices(index: i32) -> [i32; 36] {
 }
 
 impl Renderer {
-    pub fn new(cubes: Vec<Cube>) -> Result<Self, RendererInitError> {
+    pub fn new(cubes: Vec<Cube>, ui: UserInterface) -> Result<Self, RendererInitError> {
         unsafe {
             // Level shader program and buffers
             let vertex_shader = Shader::new(VERTEX_SHADER_SOURCE, gl::VERTEX_SHADER)?;
@@ -255,11 +272,12 @@ impl Renderer {
                 ui_vertex_array,
                 angle: 0.0,
                 total_length,
+                ui
             })
         }
     }
 
-    pub fn draw(&mut self, cam: &Camera, ui: &UITexture, display_ui: &bool) {
+    pub fn draw(&mut self, cam: &Camera) {
         let model = Mat4::from_rotation_x(self.angle);
         let view = Mat4::look_at_rh(cam.pos, cam.target, Vec3::new(0.0, 1.0, 0.0));
         let projection = Mat4::perspective_rh_gl(45.0f32.to_radians(), 1024.0 / 768.0, 0.1, 2000.0);
@@ -292,13 +310,11 @@ impl Renderer {
             // log::info!("rendering ui");
 
             // render UI
-            if *display_ui {
-                gl::Disable(gl::DEPTH_TEST);
-                self.ui_program.apply();
-                self.ui_vertex_array.bind();
-                ui.activate(gl::TEXTURE1);
-                gl::DrawElements(gl::TRIANGLES, 8, gl::UNSIGNED_INT, ptr::null());
-            }
+            gl::Disable(gl::DEPTH_TEST);
+            self.ui_program.apply();
+            self.ui_vertex_array.bind();
+            self.ui.ui_texture.activate(gl::TEXTURE1);
+            gl::DrawElements(gl::TRIANGLES, 8, gl::UNSIGNED_INT, ptr::null());
         }
     }
 }
