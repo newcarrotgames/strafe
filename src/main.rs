@@ -225,8 +225,7 @@ fn main() {
                     ..
                 } => {
                     log::info!("left?");
-                    // eye[0] += 1.0;
-                    camera.turn(45.0);
+                    camera.turn(1);
                 }
                 WindowEvent::KeyboardInput {
                     input:
@@ -238,7 +237,7 @@ fn main() {
                     ..
                 } => {
                     log::info!("right?");
-                    camera.turn(-45.0);
+                    camera.turn(-1);
                 }
                 WindowEvent::KeyboardInput {
                     input:
