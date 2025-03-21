@@ -12,7 +12,7 @@ const FORFPI: f32 = PI / 4.0;
 
 impl Camera {
     pub fn new(spawn: [u32; 2]) -> Camera {
-        let pos = Vec3::new(spawn[0] as f32 + 0.5, 0.0, spawn[1] as f32 + 0.5);
+        let pos = Vec3::new(spawn[0] as f32, 0.0, spawn[1] as f32);
         let ang: f32 = 0.0;
         let x = ang.sin();
         let y = ang.cos();
